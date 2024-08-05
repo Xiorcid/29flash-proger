@@ -12,7 +12,7 @@ import json
 
 app = QtWidgets.QApplication([])
 ui = uic.loadUi("29prog.ui")
-#C:/Users/kroko/Desktop/Z80/test/test2.hex
+# C:/Users/kroko/Desktop/Z80/test/test2.hex
 work_file = ""
 hex_vars = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F"]
 chips = ["29C256", "28C256", "28C64", "28C16", "27C512"]
@@ -40,14 +40,11 @@ def loadBlock(data):
 
 
 def writeOneBlock(block, data):
-    # print(block, data)
     print(f"Writing block {block}...")
     loadBlock(data)
 
     request = f"write,{block}"
     ser.write(bytes(request, 'utf-8'))
-    # print(request)
-    # sleep(0.01)
     if settings["verify"] != 2:
         return ser.readline()
     else:
@@ -61,23 +58,17 @@ def writeOneBlock(block, data):
 
 def writeFromFile():
     file = work_file
-    # print(file)
-    # print(rfrom, file)
     hex_lst = []
-    # with open(file, 'rb') as fp:
-    #     hex_list = str(fp.read()).replace("b'", "").replace("\\x", " ").replace("w", "").replace("'", "").split()
-    # with open(file, 'r') as fp:
-    #     hex_list = ["{:02x}".format(ord(str(c))) for c in fp.read()]
     try:
         with open(file, 'rb') as file:
             s = file.read()
-            h = ''
-            hex_list = [f'{h}{hex(i)[2:]}' for i in range(len(s))]
-        if settings["erase"] == 2 and "UV" not in chip_conf[ui.selectChip.currentText()]: erase()
+            # h = ''
+            # hex_list = [f'{h}{hex(i)[2:]}' for i in range(len(s))]
+        if settings["erase"] == 2 and "UV" not in chip_conf[ui.selectChip.currentText()]:
+            erase()
         for i in range(len(s)//16):
             sect_s = s[i * 16: (i + 1) * 16]  # a = slice(i *16 : (i + 1)*16)
-            new_s =""
-            # new_s = '{:0>6}'.format(hex(i * 16)[2:]) + '    '
+            new_s = ""
             for j in sect_s:
                 if len(hex(j)[2:]) == 1 and hex(j)[0].isalpha:
                     new_s += f'0{hex(j)[2:]} '
@@ -88,13 +79,10 @@ def writeFromFile():
             new_s += '    '
             hex_list = new_s.split()
             hex_lst += hex_list
-        # print(hex_lst)
-        # print(len(hex_lst))
-        # max_sec = int(len(hex_lst)/64)
-        # print(max_sec)
         ui.progressBar.setMaximum(int(len(hex_lst)))
         ui.progressBar.setValue(int(len(hex_lst)/100))
         for i in range(int(len(hex_lst)/64)+1):
+            j: int = 0
             for j in range(64):
                 if j+64*i >= len(hex_lst):
                     print("Done Writing")
@@ -108,11 +96,6 @@ def writeFromFile():
     except Exception as ex:
         QMessageBox.warning(ui, "Warning", "No opened files")
         print(f"WriteError: File is not available {ex}")
-
-
-def main():
-
-    return True
 
 
 def updateports():
@@ -150,7 +133,8 @@ def openfile(fname=False):
         work_file = name[0]
     else:
         work_file = fname
-    if work_file == "": return
+    if work_file == "":
+        return
 
     if work_file not in recent[-5:]:
         recent.append(work_file)
@@ -167,20 +151,19 @@ def readToFile():
     work_file = ""
     ui.setWindowTitle(f"Flash&EEPROM programmer")
     code = ""
-    LEN=int(memorySize/64)
+    LEN = int(memorySize/64)
     ui.progressBar.setMaximum(LEN)
     for i in range(0, LEN):
         ui.progressBar.setValue(i+1)
         line = str(readBlock(i)).replace("b'", "").replace("_", "").replace("\\r\\n'", "")
         code = code + line
+
     readedData = code
     fp = tempfile.TemporaryFile()
     fp.write(bytes.fromhex(code))
     fp.seek(0)
     ui.filecontent.setText(drawhex(fp, type=0))
 
-    # with open("file.hex", "wb") as fh:
-    #     fh.write(bytes.fromhex(code))
     print("Done reading.")
 
 
@@ -208,9 +191,11 @@ def saveFile():
 
 def updateChip():
     global memorySize
-    if work_file == "": drawDummyHex()
+    if work_file == "":
+        drawDummyHex()
     memorySize = int(chip_conf[ui.selectChip.currentText()].split("K")[0]) * 1024
-    if not isProgConnected: return 0
+    if not isProgConnected:
+        return 0
     if "UV" in chip_conf[ui.selectChip.currentText()]:
         ui.erase.setEnabled(False)
         ui.erase.setStyleSheet("color : gray")
@@ -233,7 +218,7 @@ def fillRecent():
         # print(recent)
     for rec in recent[-5:]:
         act = QAction(rec, ui)
-        act.triggered.connect(partial(openfile,rec))
+        act.triggered.connect(partial(openfile, rec))
         ui.menuRecent.addAction(act)
 
 
@@ -263,7 +248,7 @@ def loadSettings():
 def drawDummyHex():
     dummy = ' ' * 10 + ' '.join([f'{""}0{hex(i)[2:]}' for i in range(16)]) + '\n'
     for j in range(int(memorySize/16)-1):
-        dummy += ('{:0>6}'.format(hex((j + 1) * 16)[2:]) + '    ' + "ff "*16 +"    "+ "ÿ"*16 + "\n")
+        dummy += ('{:0>6}'.format(hex((j + 1) * 16)[2:]) + '    ' + "ff "*16 + "    " + "ÿ"*16 + "\n")
     ui.filecontent.setText(dummy)
 
 
@@ -287,16 +272,10 @@ def setConnectionMode(checked):
     settings["connect"] = checked
 
 
-if __name__ == "__main__":
-    # work = True
-    # while work:
-    ser = serial.Serial()
+def configureUI():
     pixmap = QPixmap("28 zif.png")
     pixmap = pixmap.scaled(181, 351)
     ui.flashimg.setPixmap(pixmap)
-    work = main()
-    updateports()
-    fillRecent()
     ui.selectChip.addItems(chips)
     ui.read.clicked.connect(readToFile)
     ui.update.clicked.connect(updateports)
@@ -316,7 +295,14 @@ if __name__ == "__main__":
     ui.erase.setStyleSheet("color : gray")
     ui.write.setStyleSheet("color : gray")
     ui.read.setStyleSheet("color : gray")
-    loadSettings()
     ui.setWindowTitle(f"Flash&EEPROM programmer")
+
+
+if __name__ == "__main__":
+    ser = serial.Serial()
+    configureUI()
+    updateports()
+    fillRecent()
+    loadSettings()
     ui.show()
     app.exec()
