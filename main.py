@@ -212,7 +212,6 @@ def fillRecent():
     ui.menuRecent.clear()
     with open("recent.json") as conf:
         recent = json.loads(conf.read())
-        # print(recent)
     for rec in recent[-5:]:
         act = QAction(rec, ui)
         act.triggered.connect(partial(openfile, rec))
