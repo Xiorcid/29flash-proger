@@ -62,8 +62,6 @@ def writeFromFile():
     try:
         with open(file, 'rb') as file:
             s = file.read()
-            # h = ''
-            # hex_list = [f'{h}{hex(i)[2:]}' for i in range(len(s))]
         if settings["erase"] == 2 and "UV" not in chip_conf[ui.selectChip.currentText()]:
             erase()
         for i in range(len(s)//16):
@@ -168,7 +166,6 @@ def readToFile():
 
 
 def readBlock(block):
-
     # bit1 = byte >> 8
     # bit2 = byte ^ bit1 << 8
     request = f"read,{block}"
