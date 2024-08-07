@@ -109,6 +109,8 @@ class File:
         if self.fileLength % 64:
             self.blockLength += 1
             self.content += ["ff" for i in range(64-self.fileLength % 64)]
+        ui.setWindowTitle(f"Flash&EEPROM programmer: {self.fileName}")
+        ui.filecontent.setText(drawhex(self.fileName))
 
     def resetFile(self):
         self.fileName = ""
@@ -139,13 +141,13 @@ def writeOneBlock(block, data):
     ser.write(bytes(request, 'utf-8'))
     if config.verifyEN():
         ser.readline()
-    else:
-        ser.readline()
         read = str(readBlock(block)).replace("b'", "").replace("\\r\\n'", "").lower()
         readArray = read.split("_")
         if data != readArray:
             QMessageBox.critical(ui, "Error", f"Verification error at block {block}.\nWriting terminated.")
             return 1
+    else:
+        ser.readline()
     return 0
 
 
@@ -154,6 +156,7 @@ def writeFromFile():
         QMessageBox.warning(ui, "Warning", "No opened files")
         return 0
 
+    setActButtonState(erase=False, write=False, read=False)
     if config.eraseEN() and "UV" not in config.chipAttributes:
         erase()
 
@@ -167,6 +170,7 @@ def writeFromFile():
         print("Done")
         ui.progressBar.setValue(ui.progressBar.maximum())
 
+    setActButtonState(erase=True, write=True, read=True)
 
     # try:
     #     with open(file, 'rb') as file:
@@ -215,6 +219,8 @@ def updateports():
 
 
 def openport():
+    if config.progConnected:
+        return 1
     try:
         ser.baudrate = 115200
         ser.port = ui.com.currentText()
@@ -235,22 +241,21 @@ def openfile(fname=False):
     if not fname:
         home_dir = str(Path.home())
         name = QFileDialog.getOpenFileName(ui, 'Open file', home_dir)
+        if name[0] == "":
+            return 1
         file.setFile(name[0])
     else:
         file.setFile(fname)
-    if file.fileName == "":
-        return
 
     if file.fileName not in recent[-5:]:
         recent.append(file.fileName)
         with open("recent.json", "w") as conf:
             conf.write(json.dumps(recent))
         fillRecent()
-    ui.setWindowTitle(f"Flash&EEPROM programmer: {file.fileName}")
-    ui.filecontent.setText(drawhex(file.fileName))
 
 
 def readToFile():
+    setActButtonState(erase=False, write=False, read=False)
     file.resetFile()
     ui.setWindowTitle(f"Flash&EEPROM programmer")
     code = ""
@@ -259,6 +264,10 @@ def readToFile():
     for i in range(0, LEN):
         ui.progressBar.setValue(i+1)
         line = str(readBlock(i)).replace("b'", "").replace("_", "").replace("\\r\\n'", "")
+        if line == "1":
+            setProgState(0)
+            QMessageBox.critical(ui, "Error", "Communication error.\nReading terminated.")
+            return 1
         code = code + line
 
     file.tempFileContent = code
@@ -266,7 +275,7 @@ def readToFile():
     fp.write(bytes.fromhex(code))
     fp.seek(0)
     ui.filecontent.setText(drawhex(fp, type=0))
-
+    setActButtonState(erase=True, write=True, read=True)
     print("Done reading.")
 
 
@@ -279,15 +288,23 @@ def readBlock(block):
         return ser.readline()
     except Exception as ex:
         print(ex)
+        return 1
 
 
 def saveFile():
+    if file.tempFileContent == "":
+        QMessageBox.warning(ui, "Warning", f"Nothing to save.")
+        return 1
     if file.fileName == "":
         home_dir = str(Path.home())
         name = QFileDialog.getOpenFileName(ui, 'Open file', home_dir)
+        if name[0] == "":
+            return 1
         file.setFile(name[0])
+        openfile(name[0])
     with open(file.fileName, "wb") as f:
         f.write(bytes.fromhex(file.tempFileContent))
+    QMessageBox.information(ui, "Saved", f"File saved.")
 
 
 def updateChip():
@@ -297,9 +314,8 @@ def updateChip():
         config.drawDummyHex()
 
     isUV = not "UV" in config.chipAttributes
-
-    ui.erase.setEnabled(isUV)
-    ui.erase.setStyleSheet(f"color : {"black" if isUV else "gray"}")
+    if config.progConnected:
+        setActButtonState(erase=isUV)
     ui.autoerase.setEnabled(isUV)
     ui.autoerase.setStyleSheet(f"color : {"black" if isUV else "gray"}")
     ui.actionAutoerase.setEnabled(isUV)
@@ -341,17 +357,46 @@ def configureUI():
     ui.autoverify.stateChanged.connect(config.setVerifyMode)
     ui.actionSave_settings.triggered.connect(config.saveSettings)
     ui.selectChip.currentIndexChanged.connect(updateChip)
-    ui.erase.setStyleSheet("color : gray")
-    ui.write.setStyleSheet("color : gray")
-    ui.read.setStyleSheet("color : gray")
+    setActButtonState(erase=False, write=False, read=False)
     ui.setWindowTitle(f"Flash&EEPROM programmer")
+
+
+def setProgState(code):
+    # 0 - Error
+    match code:
+        case 0:
+            ui.state.setText(f"Not connected")
+
+    setActButtonState(erase=code, write=code, read=code)
+    # ui.read.setStyleSheet(f"color : {"gray" if code else "black"}")
+    # ui.write.setStyleSheet(f"color : {"gray" if code else "black"}")
+    # ui.erase.setStyleSheet(f"color : {"gray" if code else "black"}")
+    # ui.erase.setEnabled(code)
+    # ui.read.setEnabled(code)
+    # ui.write.setEnabled(code)
+    config.progConnected = code
+
+
+def setActButtonState(**kwargs):
+    if kwargs.get("read") is not None:
+        ui.read.setStyleSheet(f"color : {"black" if kwargs.get("read") else "gray"}")
+        ui.read.setEnabled(kwargs.get("read"))
+    if kwargs.get("write") is not None:
+        ui.write.setStyleSheet(f"color : {"black" if kwargs.get("write") else "gray"}")
+        ui.write.setEnabled(kwargs.get("write"))
+    if kwargs.get("erase") is not None:
+        ui.erase.setStyleSheet(f"color : {"black" if kwargs.get("erase") else "gray"}")
+        ui.erase.setEnabled(kwargs.get("erase"))
+
+
 
 
 if __name__ == "__main__":
     ser = serial.Serial()
-    configureUI()
     updateports()
     fillRecent()
+    configureUI()
     config.readConfig()
+
     ui.show()
     sys.exit(app.exec())
